@@ -18,6 +18,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class StockServiceTest {
     @Autowired
     StockService stockService;
+    @Autowired
+    PessimisticLockService pessimisticLockService;
 
     @Autowired
     StockRepository stockRepository;
@@ -41,7 +43,7 @@ class StockServiceTest {
     }
 
     @Test
-    void 동시에_100개_요청() throws InterruptedException {
+    void 동시에_100개_요청_Synchronized() throws InterruptedException {
         final int threadCount = 100;
         ExecutorService executorService = Executors.newFixedThreadPool(32);
         CountDownLatch countDownLatch = new CountDownLatch(threadCount);
@@ -50,6 +52,28 @@ class StockServiceTest {
             executorService.submit(() -> {
                 try {
                     stockService.decrease(1L, 1L);
+                } finally {
+                    countDownLatch.countDown();
+                }
+            });
+        }
+
+        countDownLatch.await();
+        Stock stock = stockRepository.findById(1L).orElseThrow();
+
+        assertEquals(0L, stock.getQuantity());
+    }
+
+    @Test
+    void 동시에_100개_요청_Pessimistic() throws InterruptedException {
+        final int threadCount = 100;
+        ExecutorService executorService = Executors.newFixedThreadPool(32);
+        CountDownLatch countDownLatch = new CountDownLatch(threadCount);
+
+        for(int i = 0; i < threadCount; ++i) {
+            executorService.submit(() -> {
+                try {
+                    pessimisticLockService.decrease(1L, 1L);
                 } finally {
                     countDownLatch.countDown();
                 }
